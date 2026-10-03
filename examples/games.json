@@ -1,0 +1,22 @@
+{
+  "scanIntervalMs": 2500,
+  "discoveryIntervalMs": 60000,
+  "stableForMs": 3000,
+  "missingGraceMs": 8000,
+  "games": [
+    {
+      "name": "Example Adventure",
+      "executables": [
+        "Adventure.exe",
+        "Adventure-Win64-Shipping.exe"
+      ]
+    },
+    {
+      "name": "Example Racing",
+      "executables": [
+        "Racing.exe"
+      ],
+      "bottle": "RacingBottle"
+    }
+  ]
+}

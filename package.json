@@ -1,0 +1,40 @@
+{
+  "name": "steam-wine-presence",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Linux daemon that reports configured Wine and Bottles games as non-Steam game presence using steam-user.",
+  "license": "MIT",
+  "author": "Adiker",
+  "type": "commonjs",
+  "main": "steam-presence-daemon.js",
+  "scripts": {
+    "start": "node steam-presence-daemon.js",
+    "debug": "node steam-presence-daemon.js --debug",
+    "check": "node --check steam-presence-daemon.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "os": [
+    "linux"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Adiker/steam-wine-presence.git"
+  },
+  "homepage": "https://github.com/Adiker/steam-wine-presence#readme",
+  "bugs": {
+    "url": "https://github.com/Adiker/steam-wine-presence/issues"
+  },
+  "keywords": [
+    "steam",
+    "wine",
+    "bottles",
+    "presence",
+    "linux",
+    "daemon"
+  ],
+  "dependencies": {
+    "steam-user": "^5.3.0"
+  }
+}
