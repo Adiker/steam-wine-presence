@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node steam-presence-daemon.js",
     "debug": "node steam-presence-daemon.js --debug",
-    "check": "node --check steam-presence-daemon.js"
+    "check": "node --check steam-presence-daemon.js && node --check steam-login.js",
+    "login": "node steam-login.js"
   },
   "engines": {
     "node": ">=22"
@@ -35,6 +36,7 @@
     "daemon"
   ],
   "dependencies": {
-    "steam-user": "^5.3.0"
+    "steam-user": "^5.3.0",
+    "steam-session": "^1.9.4"
   }
 }

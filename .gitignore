@@ -8,13 +8,30 @@ npm-debug.log*
 # Credentials, authentication state, and environment files
 .env
 .env.*
+.npmrc
+.netrc
+.auth/
 *.pem
 *.key
-refresh-token*
-refresh_token*
-access-token*
-access_token*
+*refresh-token*
+*refresh_token*
+*access-token*
+*access_token*
+token
+token.*
 *token.json
+*token*.json
+*token*.txt
+*token*.log
+tokens/
+secrets/
+credentials/
+auth.json
+auth.*.json
+session.json
+session.*.json
+cookies*.json
+cookies*.txt
 credentials*.json
 secrets*.json
 ssfn*
@@ -25,6 +42,10 @@ sentry*
 # Local configuration and service overrides (public examples live in examples/)
 /games.json
 /games.*.json
+/config.json
+/config.*
+*.local.json
+/config/
 /steam-presence.service
 /steam-wine-presence.service
 *.service.d/

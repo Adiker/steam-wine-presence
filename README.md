@@ -2,7 +2,7 @@
 
 A lightweight Linux daemon that detects configured Windows game processes running under Wine or Bottles and shows their names as **non-Steam game presence** on Steam.
 
-The project uses [`steam-user`](https://github.com/DoctorMcKay/node-steam-user) to connect to the Steam network and report the active game. Games do not need to be added as shortcuts in the desktop Steam client. The daemon reports a custom game name; it does not provide Steam achievements, overlay integration, or store-app playtime tracking.
+The project uses [`steam-user`](https://github.com/DoctorMcKay/node-steam-user) to connect to the Steam network and report the active game, and [`steam-session`](https://github.com/DoctorMcKay/node-steam-session) for the interactive first-time login helper. Games do not need to be added as shortcuts in the desktop Steam client. The daemon reports a custom game name; it does not provide Steam achievements, overlay integration, or store-app playtime tracking.
 
 ## Features
 
@@ -14,6 +14,7 @@ The project uses [`steam-user`](https://github.com/DoctorMcKay/node-steam-user) 
 - Automatic configuration reload and adjustable scan intervals.
 - Periodic discovery of unknown Wine programs, with suggested configuration entries. Unknown programs are **never published** to Steam.
 - Automatic Steam reconnection and refresh-token renewal through `steam-user`.
+- Interactive first-time login with a masked password and preferred Steam mobile app confirmation.
 - Presence cleanup on Ctrl+C or SIGTERM.
 - An example systemd user service.
 
@@ -22,7 +23,8 @@ The project uses [`steam-user`](https://github.com/DoctorMcKay/node-steam-user) 
 - Linux with readable `/proc` process metadata.
 - Node.js 22 or newer and npm. Use a supported Node.js release.
 - Wine or Bottles and a game with an identifiable `.exe` process name.
-- Your own Steam account, internet access, and a refresh token valid for **Steam client login**.
+- Your own Steam account and internet access. The included login helper creates a refresh token valid for **Steam client login**.
+- An interactive terminal for first-time login, and access to your account's Steam Guard authentication method. Confirmation in the Steam mobile app is preferred.
 - systemd only if you want to use the optional user service.
 
 Run the daemon as the same user who runs the games. Process isolation or restrictions on `/proc` can prevent detection, especially reading `WINEPREFIX` for bottle matching. The daemon does not require root.
@@ -38,7 +40,7 @@ npm ci --omit=dev
 npm run check
 ```
 
-The committed lockfile preserves the dependency versions used by the original project. `private: true` in `package.json` prevents accidental npm publication; the GitHub repository is public.
+The committed lockfile provides reproducible dependency installation. `private: true` in `package.json` prevents accidental npm publication; the GitHub repository is public.
 
 ## Configuration
 
@@ -104,23 +106,40 @@ Save `games.json` to apply changes without restarting. Invalid JSON or a missing
 
 If `games.json` does not exist, the daemon creates its original built-in sample configuration. The example above is the recommended starting point. `fallbackUnknownExe` is not a supported option; unknown executables remain discovery-only.
 
-### 2. Provide a Steam refresh token
+### 2. First-time Steam login
 
-The daemon consumes an existing refresh token; it has no interactive username/password login flow. Obtain a token for your own account through a trusted local login tool, such as the official [`steam-session` login examples](https://github.com/DoctorMcKay/node-steam-session/tree/master/examples). Those examples demonstrate password/Steam Guard and QR authentication. Use `EAuthTokenPlatformType.SteamClient`, as shown in the examples: a browser-only token will not work for this daemon. See the [`steam-user` refresh-token documentation](https://github.com/DoctorMcKay/node-steam-user#using-refresh-tokens).
-
-Store only the refresh token in `~/.config/steam-presence/refresh-token`, without quotes or JSON. For example, this Bash prompt accepts it without echoing it or putting its value in shell history:
+Run the included helper manually in an interactive terminal, before starting the daemon or enabling its systemd service:
 
 ```bash
-read -r -s -p 'Paste your Steam client refresh token: ' steam_presence_token
-printf '\n'
-if [ -n "$steam_presence_token" ]; then
-  (umask 077; printf '%s\n' "$steam_presence_token" > "$HOME/.config/steam-presence/refresh-token")
-  chmod 600 "$HOME/.config/steam-presence/refresh-token"
-fi
-unset steam_presence_token
+cd "$HOME/steam-wine-presence"
+npm run login
+# Equivalent: node steam-login.js
 ```
 
-Keep the token outside the repository. Treat it as a credential, and do not include it in screenshots, issues, or logs. Upstream login examples may print tokens and other account details; keep their output private. The daemon saves renewed tokens back to this file automatically. If authentication stops working, stop the daemon, obtain a new client token, replace the file, and start it again.
+1. Enter your Steam **account login name**, not your profile display name.
+2. Enter your Steam password. The terminal shows asterisks instead of the password; the password itself is never displayed or written to disk by the script.
+3. Open the Steam app on your phone and approve the login request when prompted.
+4. Wait for the success message confirming that the refresh token was saved locally.
+
+**`DeviceConfirmation` in the Steam mobile app is the preferred flow.** If Steam offers both mobile approval and a Steam Guard code, the helper waits for mobile approval and does not ask for a code. The approval timeout is three minutes. If mobile confirmation is unavailable, the helper follows the method offered by Steam: an app code, email confirmation, or an email code. Accounts without an additional Steam Guard requirement can complete login directly.
+
+The helper uses `steam-session` with `EAuthTokenPlatformType.SteamClient` to obtain a token suitable for the daemon. It automatically writes the refresh token to:
+
+```text
+~/.config/steam-presence/refresh-token
+```
+
+The configuration directory has permissions **`0700`**, and the token file has permissions **`0600`** (read/write for its owner only). The helper explicitly applies these permissions even when the directory or file already exists. No manual token copying is needed. You can verify the file's permissions without displaying its contents:
+
+```bash
+stat -c '%a %n' "$HOME/.config/steam-presence/refresh-token"
+```
+
+**Neither the password nor the token is stored in the repository or displayed by the login script.** The password is used in memory for authentication; the refresh token is stored only in the local file above. The login helper does display the account's SteamID and the local token-file path in its success message, so remove these details before sharing output.
+
+After this one-time login, `npm start` reads the saved refresh token and connects without prompting for your password or requiring the login helper at each startup. Through `steam-user`, the daemon can renew the refresh token later and save the replacement back to the same local file. If the token expires or is revoked, perform the interactive login again as described under Troubleshooting.
+
+Keep the token outside the repository and treat it as a credential. Never include it in screenshots, issues, or logs. See the [`steam-user` refresh-token documentation](https://github.com/DoctorMcKay/node-steam-user#using-refresh-tokens) for background.
 
 ## Run in a terminal
 
@@ -138,7 +157,7 @@ npm run debug
 
 Launch a configured game through Wine or Bottles. After the stability delay, Steam should show its configured name. Close the game to clear presence after the grace period. Press Ctrl+C to stop the daemon cleanly.
 
-The original runtime messages are mostly in Polish. Useful markers include `IN-GAME`, `OFFLINE GAME`, `[NEW]`, and `[debug]`. A `[NEW]` entry includes an executable name and a suggested game mapping; add the mapping to `games.json` if you want that game published.
+The original runtime messages, including the login prompts, are mostly in Polish. Useful daemon markers include `IN-GAME`, `OFFLINE GAME`, `[NEW]`, and `[debug]`. A `[NEW]` entry includes an executable name and a suggested game mapping; add the mapping to `games.json` if you want that game published.
 
 The daemon sets your Steam persona to Online on login and uses its own client session. It reports one game at a time and retains the active game while its process stays alive. Avoid running multiple daemon instances or another presence publisher for the same account. To move an existing installation, stop its previous service before starting this one.
 
@@ -146,7 +165,7 @@ The daemon sets your Steam persona to Online on login and uses its own client se
 
 The example expects the checkout at `~/steam-wine-presence` and Node.js at `/usr/bin/node`. Check `command -v node` first. If your checkout or Node.js location differs, edit the copied unit's `WorkingDirectory` and `ExecStart`. systemd does not load shell initialization files for tools such as nvm.
 
-After configuring games and the token:
+The service runs **only `steam-presence-daemon.js`**. It does not run `steam-login.js` or prompt for credentials. Complete `npm run login` manually in a terminal first, then install and enable the service:
 
 ```bash
 install -d -m 700 "$HOME/.config/systemd/user"
@@ -174,12 +193,15 @@ This is a user service and normally starts with your user session. The example r
 
 ## Troubleshooting and privacy
 
-- **Missing or empty refresh token:** create the token file described above. A missing token prevents startup.
-- **Steam login error:** verify that the token is current and supports client login, then check connectivity.
+- **Missing or empty refresh token:** run `npm run login` manually and finish Steam authentication before starting the daemon. A missing token prevents startup; the service may keep restarting until it is created.
+- **Expired, revoked, or rejected token:** stop the daemon (Ctrl+C, or `systemctl --user stop steam-wine-presence.service`), run `npm run login` again, and approve the new login in Steam. The helper replaces the local token file. Then run `npm start`, or `systemctl --user start steam-wine-presence.service` if you use the service. Do not run both simultaneously.
+- **Login approval timeout:** rerun `npm run login` and approve the request in the Steam mobile app within three minutes. Enter a Steam Guard code only when the helper requests one.
+- **Interactive terminal required:** run `npm run login` in a real terminal, not through systemd or with piped credentials.
+- **Other Steam login errors:** check the account login name, password, Steam Guard approval, and connectivity. Reauthenticate with `npm run login` if the existing token no longer works.
 - **Game not detected:** run in debug mode, verify executable basenames, and check that the process is visible in `/proc`. For bottle-specific entries, verify the final `WINEPREFIX` directory name.
 - **Unknown game appears only in logs:** this is expected until you add it to the allowlist. Discovery runs separately, about once a minute by default.
 - **Service cannot start Node.js:** update `ExecStart` to your actual Node.js executable and reload the user units.
-- **Sharing diagnostic output:** remove SteamID, account details, local paths, bottle names, and credentials first. Runtime logs include the logged-in SteamID; discovery logs may include private Wine prefix paths. Do not commit logs or personal configurations.
+- **Sharing diagnostic output:** remove SteamID, account details, local paths, bottle names, and credentials first. Login output and daemon logs include the logged-in SteamID; discovery logs may include private Wine prefix paths. Do not commit logs or personal configurations.
 
 The repository contains source code and fictional examples only. `.gitignore` excludes common credentials, logs, dependencies, and local configuration files. It does not replace reviewing staged files before publishing.
 
@@ -188,6 +210,7 @@ The repository contains source code and fictional examples only. `.gitignore` ex
 ```text
 steam-wine-presence/
 ├── steam-presence-daemon.js       # Original daemon, unchanged
+├── steam-login.js                 # Interactive first-time Steam login
 ├── package.json
 ├── package-lock.json
 ├── examples/
@@ -203,4 +226,4 @@ steam-wine-presence/
 
 MIT. See [LICENSE](LICENSE).
 
-Steam connectivity is provided by [`steam-user`](https://github.com/DoctorMcKay/node-steam-user), maintained by DoctorMcKay and contributors. Dependencies retain their own licenses. Steam is a trademark of Valve Corporation; this project is independent and is not affiliated with or endorsed by Valve.
+Steam connectivity is provided by [`steam-user`](https://github.com/DoctorMcKay/node-steam-user), and first-time authentication by [`steam-session`](https://github.com/DoctorMcKay/node-steam-session), maintained by DoctorMcKay and contributors. Dependencies retain their own licenses. Steam is a trademark of Valve Corporation; this project is independent and is not affiliated with or endorsed by Valve.
